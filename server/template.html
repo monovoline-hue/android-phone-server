@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi 10 Pro · Server Monitoring V1.1</title>
+<!-- 60s auto-refresh: matches the server-side fetch cadence, so a wall-mounted
+     page stays live without any client-side JS or external dependency. -->
+<meta http-equiv="refresh" content="60">
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a21; --card2:#1c2029; --bd:#262b36;
+    --tx:#e6e9ef; --tx2:#8b93a7; --tx3:#5c6478;
+    --ok:#3fb950; --warn:#d29922; --crit:#f85149; --na:#6b7280;
+    --acc:#58a6ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--tx);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    padding:24px; max-width:1280px; margin:0 auto;
+  }
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding-bottom:18px;border-bottom:1px solid var(--bd);margin-bottom:22px}
+  h1{font-size:19px;font-weight:600;letter-spacing:.2px}
+  .sub{color:var(--tx2);font-size:12.5px}
+  .badge{margin-left:auto;display:flex;align-items:center;gap:8px;
+    padding:7px 15px;border-radius:20px;font-weight:600;font-size:13px;letter-spacing:.5px}
+  .badge .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .b-ok{background:rgba(63,185,80,.13);color:var(--ok);border:1px solid rgba(63,185,80,.3)}
+  .b-warn{background:rgba(210,153,34,.13);color:var(--warn);border:1px solid rgba(210,153,34,.3)}
+  .b-crit{background:rgba(248,81,73,.13);color:var(--crit);border:1px solid rgba(248,81,73,.3)}
+  .b-na{background:rgba(107,114,128,.13);color:var(--na);border:1px solid rgba(107,114,128,.3)}
+
+  .sec{font-size:11.5px;color:var(--tx3);text-transform:uppercase;letter-spacing:1.2px;
+    margin:26px 0 12px;font-weight:600}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:11px}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:13px 15px}
+  .card .k{color:var(--tx2);font-size:11.5px;margin-bottom:7px;letter-spacing:.3px}
+  .card .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}
+  .card .u{font-size:12px;color:var(--tx2);font-weight:400;margin-left:3px}
+  .card .n{font-size:11px;color:var(--tx3);margin-top:5px;min-height:14px}
+  .v.ok{color:var(--ok)} .v.warn{color:var(--warn)} .v.crit{color:var(--crit)} .v.na{color:var(--na)}
+
+  /* V1.1 — stability + event feed. Same palette, no animation, no new hues. */
+  .statgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:11px}
+  .stat{background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:12px 15px}
+  .stat .k{color:var(--tx2);font-size:11.5px;margin-bottom:6px;letter-spacing:.3px}
+  .stat .v{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}
+  .stat .u{font-size:12px;color:var(--tx2);font-weight:400;margin-left:3px}
+  .stat .n{font-size:11px;color:var(--tx3);margin-top:5px;min-height:14px}
+
+  .ev{background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:4px 16px}
+  .ev .row{display:flex;gap:12px;align-items:baseline;padding:9px 0;
+    border-bottom:1px solid var(--bd);font-size:13px}
+  .ev .row:last-child{border-bottom:none}
+  .ev .tm{color:var(--tx3);font-family:ui-monospace,Consolas,monospace;
+    font-size:12px;flex-shrink:0;min-width:48px}
+  .ev .ty{flex:1}
+  .ev .du{color:var(--tx2);font-size:12px;font-variant-numeric:tabular-nums;flex-shrink:0}
+  .ty.down{color:var(--crit)} .ty.up{color:var(--ok)} .ty.info{color:var(--tx)}
+  .rt{font-size:11px;padding:1px 7px;border-radius:4px;flex-shrink:0}
+  .rt.automatic{background:rgba(63,185,80,.14);color:var(--ok)}
+  .rt.unknown{background:rgba(107,114,128,.14);color:var(--na)}
+  .rt.manual{background:rgba(88,166,255,.14);color:var(--acc)}
+  .caveat{margin-top:10px;color:var(--tx3);font-size:11.5px;line-height:1.7}
+
+  .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(390px,1fr));gap:13px}
+  .chart{background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:14px 16px 10px}
+  .chart .ch{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
+  .chart .t{font-size:12.5px;color:var(--tx2);font-weight:500}
+  .chart .cur{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
+  svg{display:block;width:100%;height:104px;overflow:visible}
+
+  .alerts{background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:6px 16px}
+  .alert{padding:10px 0;border-bottom:1px solid var(--bd);font-size:13px;display:flex;gap:11px;align-items:flex-start}
+  .alert:last-child{border-bottom:none}
+  .alert .lv{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.6px;flex-shrink:0;margin-top:1px}
+  .lv.CRITICAL{background:rgba(248,81,73,.16);color:var(--crit)}
+  .lv.WARNING{background:rgba(210,153,34,.16);color:var(--warn)}
+  .clean{color:var(--ok);padding:13px 0;font-size:13px}
+
+  .uns{background:var(--card2);border:1px solid var(--bd);border-radius:9px;padding:14px 16px}
+  .uns .row{display:flex;gap:10px;padding:6px 0;font-size:12.5px;border-bottom:1px dashed var(--bd)}
+  .uns .row:last-child{border-bottom:none}
+  .uns .m{color:var(--tx2);font-family:ui-monospace,Consolas,monospace;font-size:12px;flex-shrink:0;min-width:210px}
+  .uns .r{color:var(--tx3);font-size:12px}
+  footer{margin-top:30px;padding-top:16px;border-top:1px solid var(--bd);
+    color:var(--tx3);font-size:11.5px;line-height:1.8}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1 id="dev">Xiaomi Mi 10 Pro</h1>
+    <div class="sub">Android Phone Server · Monitor V1.1 · <span id="ip"></span></div>
+  </div>
+  <div class="badge b-na" id="badge"><span class="dot"></span><span id="badgeTx">--</span></div>
+</header>
+
+<div class="sec">系统状态</div>
+<div class="grid" id="cards"></div>
+
+<div class="sec">稳定性 · 基于真实历史样本统计</div>
+<div class="statgrid" id="stab"></div>
+<div class="caveat" id="stabnote"></div>
+
+<div class="sec">历史曲线</div>
+<div class="charts" id="charts"></div>
+
+<div class="sec">告警</div>
+<div class="alerts" id="alerts"></div>
+
+<div class="sec">最近事件 · 仅在状态发生变化时记录</div>
+<div class="ev" id="evs"></div>
+<div class="caveat" id="evnote"></div>
+
+<div class="sec">不可监控项 · 权限原因</div>
+<div class="uns" id="uns"></div>
+
+<footer id="foot"></footer>
+
+<script>
+const D = __DATA__;
+const C = D.current || {};
+const S = C.raw || {};
+const A = D.series || [];
+const V = D.v11 || {};          // V1.1: stats + recent events
+const ST = V.stats || null;
+
+const $ = id => document.getElementById(id);
+const nf = (v,d=0) => (v===null||v===undefined||v==="") ? null : Number(v).toFixed(d);
+
+function setBadge(status){
+  const b=$('badge'), t=$('badgeTx');
+  const map={NORMAL:['b-ok','ONLINE'],WARNING:['b-warn','WARNING'],
+             CRITICAL:['b-crit','CRITICAL'],OFFLINE:['b-crit','OFFLINE']};
+  const [cls,tx]=map[status]||['b-na','UNKNOWN'];
+  b.className='badge '+cls; t.textContent=tx;
+}
+
+function card(k,v,u,note,cls){
+  const n = note ? `<div class="n">${note}</div>` : '<div class="n"></div>';
+  return `<div class="card"><div class="k">${k}</div>
+    <div class="v ${cls||''}">${v}${u?`<span class="u">${u}</span>`:''}</div>${n}</div>`;
+}
+
+// ---------------------------------------------------------------------------
+// V1.1 · 稳定性统计（数值全部来自服务端真实历史，前端不做任何推算）
+// ---------------------------------------------------------------------------
+function fmtDur(s){
+  if(s===null||s===undefined) return '—';
+  s=Math.max(0,Math.round(s));
+  const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
+  if(d) return d+'天 '+h+'小时';
+  if(h) return h+'小时 '+m+'分';
+  if(m) return m+'分 '+(s%60)+'秒';
+  return s+'秒';
+}
+
+function stat(k,v,u,note,cls){
+  return `<div class="stat"><div class="k">${k}</div>`+
+    `<div class="v ${cls||''}">${v}${u?`<span class="u">${u}</span>`:''}</div>`+
+    `<div class="n">${note||''}</div></div>`;
+}
+
+function rateCls(p){
+  return (p===null||p===undefined) ? 'na' : (p>=99?'ok':(p>=95?'warn':'crit'));
+}
+
+function renderStability(){
+  if(!ST){
+    $('stab').innerHTML = stat('稳定性统计','—','','等待首次统计','na');
+    $('stabnote').textContent = '';
+    return;
+  }
+  const w=ST.window||{}, o=ST.online||{}, s=ST.streaks||{},
+        e=ST.events||{}, sm=ST.samples||{};
+  const pct = v => (v===null||v===undefined)?'—':v+'%';
+  const cards = [
+    stat('观察时间', w.observed_human||'—','', (w.first_sample||'').slice(0,10)+' 起',''),
+    stat('监控样本', sm.total??'—','', `正常 ${sm.normal??'—'} · 异常 ${sm.abnormal??'—'}`,''),
+    stat('整体在线率', pct(o.overall_pct),'','设备可观测时间占比', rateCls(o.overall_pct)),
+    stat('SSH 在线率', pct(o.ssh_pct),'','sshd + 8022 均正常', rateCls(o.ssh_pct)),
+    stat('Termux 在线率', pct(o.termux_pct),'','', rateCls(o.termux_pct)),
+    stat('Bridge 在线率', pct(o.bridge_pct),'','', rateCls(o.bridge_pct)),
+    stat('Tailscale 可达率', pct(o.tailscale_pct),'','与整体在线率同源', rateCls(o.tailscale_pct)),
+    stat('故障次数', e.fault_count??0,'', `已恢复 ${e.recovered_count??0}`,
+         (e.fault_count?'warn':'ok')),
+    stat('自动恢复', e.automatic_count??0,'',
+         `未知 ${e.unknown_count??0} · 人工 ${e.manual_count??0}`,'ok'),
+    stat('自动恢复率', pct(e.auto_recovery_pct),'',
+         e.recovered_count?'':'暂无故障记录','ok'),
+    stat('平均恢复时间',
+         e.avg_recovery_seconds==null?'—':fmtDur(e.avg_recovery_seconds),'',
+         '最长 '+fmtDur(e.max_recovery_seconds),''),
+    stat('最长连续在线', fmtDur(s.longest_uptime_seconds),'','','ok'),
+    stat('最长故障时间', fmtDur(s.longest_outage_seconds),'',
+         '数据空缺最长 '+fmtDur(s.max_data_gap_seconds),''),
+  ];
+  $('stab').innerHTML = cards.join('');
+  const cv = ST.caveats||[];
+  $('stabnote').innerHTML = cv.length ? cv.map(c=>'· '+c).join('<br>') : '';
+}
+
+// ---------------------------------------------------------------------------
+// V1.1 · 最近事件
+// ---------------------------------------------------------------------------
+const EV = {
+  network_down:['设备不可达','down'],       network_recovered:['设备恢复','up'],
+  ssh_down:['SSH 异常','down'],             ssh_recovered:['SSH 恢复','up'],
+  termux_down:['Termux 异常','down'],       termux_recovered:['Termux 恢复','up'],
+  bridge_down:['Bridge 异常','down'],       bridge_recovered:['Bridge 恢复','up'],
+  watchdog_restart:['watchdog 重启 sshd','info'],
+  sshd_restart:['sshd 重启（原因未归属）','info'],
+  android_reboot:['Android 重启','down'],
+  android_seen:['设备在线（心跳）','info'],
+  charging_started:['开始充电','info'],     charging_stopped:['停止充电','info'],
+  high_battery_temp:['电池高温','down'],    high_cpu_temp:['CPU 高温','down'],
+  monitor_started:['监控启动','info']
+};
+const RT = {automatic:'自动恢复', unknown:'恢复方式未知', manual:'人工干预'};
+
+function renderEvents(){
+  const all = V.recent_events || [];
+  // Heartbeats stay in events.jsonl as liveness evidence, but they are not
+  // news. Filtering them keeps "a stable week" readable as exactly that.
+  const beats = all.filter(e=>e.type==='android_seen').length;
+  const list = all.filter(e=>e.type!=='android_seen');
+
+  $('evnote').innerHTML = beats
+    ? `· 已隐藏 ${beats} 条 android_seen 心跳（存活证据，非状态变化），完整记录见 events.jsonl`
+    : '· 事件仅在状态变化时写入；长期无事件 = 长期稳定';
+
+  $('evs').innerHTML = list.length
+    ? list.map(ev=>{
+        const m = EV[ev.type] || [ev.type,'info'];
+        const t = (ev.time||'').slice(11,16);
+        const d = ev.duration_sec!=null ? fmtDur(ev.duration_sec) : '';
+        const rt = ev.recovery_type
+          ? `<span class="rt ${ev.recovery_type}">${RT[ev.recovery_type]||ev.recovery_type}</span>`
+          : '';
+        return `<div class="row"><span class="tm">${t}</span>`+
+               `<span class="ty ${m[1]}">${m[0]}</span>`+
+               `<span class="du">${d}</span>${rt}</div>`;
+      }).join('')
+    : `<div class="row"><span class="ty info">暂无状态变化 · 设备持续稳定</span></div>`;
+}
+
+function render(){
+  const a=S.android||{}, b=S.battery||{}, c=S.cpu||{}, m=S.memory||{},
+        st=S.storage||{}, nw=S.network||{}, sv=S.services||{}, dp=S.display||{};
+
+  setBadge(C.status);
+  $('dev').textContent = S.hostname || 'Xiaomi Mi 10 Pro';
+  $('ip').textContent  = (nw.tailscale_ip||'—') + '  ·  LAN ' + (nw.lan_ip||'—');
+
+  // uptime human
+  let up='—';
+  if(a.uptime_seconds!=null){
+    const s=a.uptime_seconds, d=Math.floor(s/86400), h=Math.floor(s%86400/3600), mi=Math.floor(s%3600/60);
+    up = d>0 ? `${d}天 ${h}小时` : (h>0?`${h}小时 ${mi}分`:`${mi}分`);
+  }
+
+  const booted = a.boot_completed==='1';
+  const clsBoot = booted?'ok':'crit';
+
+  // battery temp colour
+  const bt=b.temperature_c;
+  const clsBT = bt==null?'na':(bt>=48?'crit':(bt>=43?'warn':'ok'));
+
+  // cpu temp
+  const ct=c.temperature_c;
+  const clsCT = ct==null?'na':(ct>=60?'crit':(ct>=48?'warn':'ok'));
+
+  const mu=m.used_percent, clsM = mu==null?'na':(mu>=90?'warn':'ok');
+  const sp=st.used_percent, clsS = sp==null?'na':(sp>=95?'warn':'ok');
+  const cu=c.usage_percent, clsC = cu==null?'na':(cu>=90?'warn':'ok');
+
+  // battery level
+  const lvl=b.level;
+  const clsL = lvl==null?'na':(lvl<=10?'crit':(lvl<=20?'warn':'ok'));
+  const srcTag = b.source==='zonira-monitor-bridge' ? 'Bridge 自主采集'
+    : (b.source==='adb-supplement' ? 'ADB 补充' : (lvl==null?'手机端不可读':''));
+
+  const cards=[
+    card('Android 状态', booted?'已启动':'未完成','', a.android_version?`Android ${a.android_version} · MIUI ${a.miui_version||'—'}`:'', clsBoot),
+    card('运行时长', up,'', a.boot_time?`自 ${a.boot_time}`:'—', 'ok'),
+    card('最后重启', a.boot_time||'—','', a.boot_reason?('原因: '+a.boot_reason):'开机原因不可读', ''),
+    card('电池', lvl==null?'—':nf(lvl),'%', srcTag, clsL),
+    card('充电状态', b.status==null?'—':(b.charging===true?'Charging':(b.charging===false?'Discharging':b.status)),'',
+         [b.voltage_mv!=null?`${nf(b.voltage_mv)} mV`:'', b.plugged?`接入 ${b.plugged}`:'', b.health?`健康 ${b.health}`:''].filter(Boolean).join(' · '),
+         b.charging===true?'ok':(b.charging===false?'':'na')),
+    card('电池温度', bt==null?'—':nf(bt,1),'°C', b.source==='zonira-monitor-bridge'?'BatteryManager 标准数据':'热区估算', clsBT),
+    card('CPU 使用率', cu==null?'—':nf(cu,1),'%', `load ${c.load_1??'—'} / ${c.load_5??'—'} / ${c.load_15??'—'}`, clsC),
+    card('CPU 温度', ct==null?'—':nf(ct,1),'°C', c.cores?`${c.cores} 核 · 取各核最高`:'', clsCT),
+    card('内存使用率', mu==null?'—':nf(mu,1),'%', m.total_mb?`${nf(m.available_mb)} / ${nf(m.total_mb)} MB 可用`:'', clsM),
+    card('存储使用率', sp==null?'—':nf(sp,1),'%', st.free_gb!=null?`剩余 ${nf(st.free_gb,1)} GB`:'', clsS),
+    card('屏幕', dp.state||'—','', dp.source==='zonira-monitor-bridge'?'Bridge 采集 (PowerManager)':'手机端不可读', dp.state?'ok':'na'),
+    card('Monitor Bridge', sv.monitor_bridge===true?'正常':(sv.monitor_bridge===false?'异常':'—'),'',
+         '仅 HTTP + schema 判定，提供电池/屏幕', sv.monitor_bridge===true?'ok':(sv.monitor_bridge===false?'warn':'na')),
+    card('Tailscale', nw.tailscale_up===true?'在线':(nw.tailscale_up===false?'离线':'由服务器判定'),'',
+         '手机端跨 uid 不可见', nw.tailscale_up===null?'na':(nw.tailscale_up?'ok':'crit')),
+    card('SSH 8022', sv.tcp_8022===true?'监听中':(sv.tcp_8022===false?'未监听':'—'),'',
+         sv.sshd_pid?`sshd pid ${sv.sshd_pid}`:'', sv.tcp_8022===true?'ok':'crit'),
+    card('Termux', sv.termux===true?'正常':(sv.termux===false?'异常':'—'),'','', sv.termux===true?'ok':'warn'),
+    card('watchdog', sv.watchdog===true?'正常':(sv.watchdog===false?'缺失':'—'),'','每 60s 守护 sshd', sv.watchdog===true?'ok':'warn'),
+  ];
+  $('cards').innerHTML=cards.join('');
+
+  // charts
+  const defs=[
+    ['batt_lvl','Battery %','%',null,100, '#3fb950'],
+    ['batt_temp','Battery Temp','°C',null,null,'#d29922'],
+    ['cpu','CPU Usage','%',0,100,'#58a6ff'],
+    ['cpu_temp','CPU Temp','°C',null,null,'#f85149'],
+    ['mem','RAM Used','%',0,100,'#a371f7'],
+    ['sto','Storage Used','%',0,100,'#39c5cf'],
+  ];
+  $('charts').innerHTML = defs.map(([k,t,u,mn,mx,col])=>{
+    const pts=A.map(p=>[p.t,p[k]]).filter(x=>x[1]!==null&&x[1]!==undefined&&x[1]!=='');
+    const last=pts.length?pts[pts.length-1][1]:null;
+    let svg;
+    if(pts.length<2){
+      svg=`<svg viewBox="0 0 400 104"></svg>`;
+    }else{
+      const vals=pts.map(p=>Number(p[1]));
+      let lo = mn!==null?mn:Math.min(...vals), hi = mx!==null?mx:Math.max(...vals);
+      if(hi-lo<1) hi=lo+1;
+      const W=400,H=104,pad=6;
+      const X=i=>pad+i*(W-2*pad)/(pts.length-1);
+      const Y=v=>H-pad-((Number(v)-lo)/(hi-lo))*(H-2*pad);
+      const line=pts.map((p,i)=>`${i?'L':'M'}${X(i).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ');
+      const area=`${line} L${X(pts.length-1).toFixed(1)},${H-pad} L${pad},${H-pad} Z`;
+      svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        <path d="${area}" fill="${col}" opacity=".10"/>
+        <path d="${line}" fill="none" stroke="${col}" stroke-width="1.7"
+              stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="${X(pts.length-1).toFixed(1)}" cy="${Y(pts[pts.length-1][1]).toFixed(1)}"
+                r="2.6" fill="${col}"/>
+      </svg>`;
+    }
+    return `<div class="chart"><div class="ch">
+        <span class="t">${t}</span>
+        <span class="cur" style="color:${col}">${last===null?'—':Number(last).toFixed(1)}<span
+          style="font-size:11px;color:var(--tx2)"> ${u}</span></span></div>${svg}</div>`;
+  }).join('');
+
+  // alerts
+  const al=C.alerts||[];
+  $('alerts').innerHTML = al.length
+    ? al.map(a=>`<div class="alert"><span class="lv ${a.level}">${a.level}</span><span>${a.msg}</span></div>`).join('')
+    : `<div class="clean">全部健康 · 无告警</div>`;
+
+  renderStability();
+  renderEvents();
+
+  // unsupported
+  const uns=(S._unsupported)||{};
+  $('uns').innerHTML = Object.keys(uns).length
+    ? Object.entries(uns).map(([k,v])=>
+        `<div class="row"><span class="m">${k}</span><span class="r">${v}</span></div>`).join('')
+    : `<div class="row"><span class="r">无</span></div>`;
+
+  $('foot').innerHTML =
+    `采集周期 60s · 单次耗时 ${(S.collector&&S.collector.duration_ms)||'—'}ms · `+
+    `样本 ${A.length} 条 · 采集于 ${C.ts||'—'}<br>`+
+    `数据链路：手机 collect.sh → current.json → Tailscale SSH :8022 → 本页（不依赖 ADB）`+
+    (C.adb_supplement?` · 电池字段经 ADB 补充`:'')+
+    `<br>阈值规则见 dashboard/rules.json（可修改，未写死在采集脚本中）`;
+}
+render();
+</script>
+</body>
+</html>

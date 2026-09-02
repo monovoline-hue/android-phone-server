@@ -1,0 +1,26 @@
+{
+  "_comment": "Android Phone Server - server-side config EXAMPLE. Copy to config.json (gitignored) and fill real values. Alert thresholds normally live in rules.json / monitor.conf instead.",
+  "ssh": {
+    "host_alias": "mi10pro",
+    "port": 8022,
+    "remote_json": "~/zonira-monitor/current.json",
+    "remote_events": "~/zonira-monitor/events.jsonl"
+  },
+  "paths": {
+    "phone_monitor_dir": "~/zonira-monitor",
+    "dashboard_data": "data",
+    "dashboard_out": "out"
+  },
+  "events": {
+    "debounce_observations": 2,
+    "heartbeat_seconds": 21600,
+    "temp_rules": {
+      "high_battery_temp": { "enter_c": 43.0, "exit_c": 41.0 },
+      "high_cpu_temp": { "enter_c": 60.0, "exit_c": 55.0 }
+    }
+  },
+  "stats": {
+    "gap_clip_factor": 2.0,
+    "default_poll_interval_seconds": 300
+  }
+}

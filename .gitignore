@@ -1,0 +1,27 @@
+# --- runtime data (never commit: contains real IPs, device info, history) ---
+server/data/
+server/out/
+data/
+out/
+reports/
+
+# --- secrets / local config ---
+.env
+config.json
+monitor.conf
+*_local.*
+*.key
+*.pem
+id_*
+.ssh/
+
+# --- python ---
+__pycache__/
+*.pyc
+.venv/
+
+# --- OS / editor ---
+Thumbs.db
+.DS_Store
+*.swp
+*~

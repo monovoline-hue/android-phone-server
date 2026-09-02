@@ -1,0 +1,55 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# ============================================================================
+# Termux:Boot entry - start the zonira-monitor sampler.
+#
+# Contract with the existing boot scripts (start-sshd, watchdog-sshd,
+# connect-tailscale): this file touches NOTHING they own. It only spawns
+# run.sh, which has its own pidfile and refuses to double-start. Safe to run
+# repeatedly; Termux:Boot may fire more than once after a reboot.
+#
+# Forks into the background and returns immediately so it never blocks or
+# delays the other boot scripts.
+# ============================================================================
+
+MON_DIR="$HOME/zonira-monitor"
+LOG_DIR="$MON_DIR/logs"
+BOOT_LOG="$LOG_DIR/boot.log"
+
+mkdir -p "$MON_DIR" "$LOG_DIR" 2>/dev/null
+
+log() {
+  printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S%z')" "$*" >> "$BOOT_LOG" 2>/dev/null
+}
+
+log "boot hook invoked"
+
+if [ ! -x "$MON_DIR/run.sh" ]; then
+  log "run.sh missing; aborting (nothing else was touched)"
+  exit 0
+fi
+
+# run.sh performs the real single-instance check; this is only a cheap
+# pre-check to avoid spawning a doomed process.
+if [ -f "$MON_DIR/zonira-monitor.pid" ]; then
+  old=$(cat "$MON_DIR/zonira-monitor.pid" 2>/dev/null)
+  if [ -n "$old" ] && kill -0 "$old" 2>/dev/null; then
+    log "sampler already running pid=$old; nothing to do"
+    exit 0
+  fi
+fi
+
+# Wake lock is deliberately NOT used: it would keep the CPU awake. The
+# sampler is expected to be throttled under Doze; that is acceptable and
+# documented (gaps in history = device was asleep).
+nohup "$MON_DIR/run.sh" >> "$LOG_DIR/runner.out" 2>&1 &
+child=$!
+
+# give it a moment to claim the pidfile, then report
+sleep 2
+if kill -0 "$child" 2>/dev/null; then
+  log "sampler started pid=$child"
+else
+  log "sampler exited immediately; see logs/runner.log"
+fi
+
+exit 0

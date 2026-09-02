@@ -1,0 +1,16 @@
+{
+  "_comment": "Alert thresholds. Edit freely - fetch.py reads this on every run. Kept out of both the collector and the core judgement logic on purpose.",
+
+  "batt_temp_critical": 48,
+  "batt_temp_warning": 43,
+  "storage_free_critical_gb": 10,
+  "storage_free_warning_gb": 30,
+  "poll_interval_seconds": 300,
+  "offline_critical_minutes": 10,
+  "ssh_fail_warning_count": 3,
+  "mem_used_warning_percent": 90,
+  "stale_sample_seconds": 420,
+  "battery_low_warning_percent": 20,
+  "battery_low_critical_percent": 10,
+  "bridge_fail_warning_minutes": 10
+}
